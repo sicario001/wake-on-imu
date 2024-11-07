@@ -114,24 +114,42 @@ void noteActivity() {
     lastActivity = millis();
 }
 
-struct IMUReading {
+typedef struct IMUReading {
     int x;
     int y;
     int z;
-};
-
-typedef struct IMUReading getCalibratedIMUReading() {
-    // Read the analog values for X, Y, Z axes of the ADXL335 accelerometer
-    int xReading = analogRead(xPin);
-    int yReading = analogRead(yPin);
-    int zReading = analogRead(zPin);
-
-    return {xReading, yReading, zReading};
 } IMUReading_t;
+
+IMUReading_t getCalibratedIMUReading() {
+    // Read the analog values for X, Y, Z axes of the ADXL335 accelerometer
+    int x = analogRead(xPin);
+    int y = analogRead(yPin);
+    int z = analogRead(zPin);
+
+    int cal_x = x;
+    int cal_y = y;
+    int cal_z = z;
+
+    Serial.print("X: ");
+    Serial.print(cal_x);
+    Serial.print("\t");
+    Serial.print("Y: ");
+    Serial.print(cal_y);
+    Serial.print("\t");
+    Serial.print("Z: ");
+    Serial.print(cal_z);
+    Serial.println();
+
+    return {x, y, z};
+}
 
 bool checkIMUmotion() {
     IMUReading_t imuReading = getCalibratedIMUReading();
     int accMagnitude = imuReading.x * imuReading.x + imuReading.y * imuReading.y + imuReading.z * imuReading.z;
+    
+    Serial.print("accMagnitude: ");
+    Serial.println(accMagnitude);
+    
     double fractional_threshold = 0.01;
 
     if (accMagnitude < steadyStateAccMagnitude * (1 - fractional_threshold) || accMagnitude > steadyStateAccMagnitude * (1 + fractional_threshold)) {
