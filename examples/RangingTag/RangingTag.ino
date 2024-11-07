@@ -41,7 +41,7 @@ const int xPin = A0;
 const int yPin = A1;
 const int zPin = A2;
 
-int steadyStateAccMagnitude = 100;
+int steadyStateAccMagnitude = 940000;
 
 // messages used in the ranging protocol
 // TODO replace by enum
@@ -120,25 +120,18 @@ typedef struct IMUReading {
     int z;
 } IMUReading_t;
 
-IMUReading_t getCalibratedIMUReading() {
+struct IMUReading getCalibratedIMUReading() {
     // Read the analog values for X, Y, Z axes of the ADXL335 accelerometer
     int x = analogRead(xPin);
     int y = analogRead(yPin);
     int z = analogRead(zPin);
 
-    int cal_x = x;
-    int cal_y = y;
-    int cal_z = z;
-
     Serial.print("X: ");
-    Serial.print(cal_x);
-    Serial.print("\t");
-    Serial.print("Y: ");
-    Serial.print(cal_y);
-    Serial.print("\t");
-    Serial.print("Z: ");
-    Serial.print(cal_z);
-    Serial.println();
+    Serial.print(x);
+    Serial.print("g\tY: ");
+    Serial.print(y);
+    Serial.print("g\tZ: ");
+    Serial.print(z);
 
     return {x, y, z};
 }
@@ -146,11 +139,12 @@ IMUReading_t getCalibratedIMUReading() {
 bool checkIMUmotion() {
     IMUReading_t imuReading = getCalibratedIMUReading();
     int accMagnitude = imuReading.x * imuReading.x + imuReading.y * imuReading.y + imuReading.z * imuReading.z;
-    
-    Serial.print("accMagnitude: ");
-    Serial.println(accMagnitude);
-    
-    double fractional_threshold = 0.01;
+    double fractional_threshold = 0.1;
+
+    Serial.print("\taccMagnitude: ");
+    Serial.print(accMagnitude);
+    Serial.print("\tsteadyStateAccMagnitude: ");
+    Serial.println(steadyStateAccMagnitude);
 
     if (accMagnitude < steadyStateAccMagnitude * (1 - fractional_threshold) || accMagnitude > steadyStateAccMagnitude * (1 + fractional_threshold)) {
         return true;
@@ -163,7 +157,7 @@ void DW1000_sleep() {
     DW1000.deepSleep();
     inSleep = true;
     // mark led for sleep
-    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(LED_BUILTIN, LOW);
 }
 
 void DW1000_wakeup() {
@@ -171,10 +165,11 @@ void DW1000_wakeup() {
     DW1000.spiWakeup();
     inSleep = false;
     // mark led for wakeup
-    digitalWrite(LED_BUILTIN, LOW);
+    digitalWrite(LED_BUILTIN, HIGH);
 }
 
 void checkIMUandRetransmit() {
+    Serial.print("Inside check IMU and Retransmit");
     if (checkIMUmotion()) {
         if (inSleep) {
             DW1000_wakeup();
@@ -288,4 +283,3 @@ void loop() {
         }
     }
 }
-
