@@ -29,11 +29,19 @@
 
 #include <SPI.h>
 #include <DW1000.h>
+#include <assert.h>
 
 // connection pins
 const uint8_t PIN_RST = 9; // reset pin
 const uint8_t PIN_IRQ = 2; // irq pin
 const uint8_t PIN_SS = SS; // spi select pin
+
+// Define pins for ADXL335
+const int xPin = A0;
+const int yPin = A1;
+const int zPin = A2;
+
+int steadyStateAccMagnitude = 100;
 
 // messages used in the ranging protocol
 // TODO replace by enum
@@ -59,6 +67,12 @@ uint32_t lastActivity;
 uint32_t resetPeriod = 250;
 // reply times (same on both sides for symm. ranging)
 uint16_t replyDelayTimeUS = 3000;
+
+// sleep timeout period
+uint32_t resetSleepPeriod = 0;
+
+// Device sleep state
+boolean inSleep = false;
 
 void setup() {
     // DEBUG monitoring
@@ -100,11 +114,67 @@ void noteActivity() {
     lastActivity = millis();
 }
 
+struct IMUReading {
+    int x;
+    int y;
+    int z;
+};
+
+typedef struct IMUReading getCalibratedIMUReading() {
+    // Read the analog values for X, Y, Z axes of the ADXL335 accelerometer
+    int xReading = analogRead(xPin);
+    int yReading = analogRead(yPin);
+    int zReading = analogRead(zPin);
+
+    return {xReading, yReading, zReading};
+} IMUReading_t;
+
+bool checkIMUmotion() {
+    IMUReading_t imuReading = getCalibratedIMUReading();
+    int accMagnitude = imuReading.x * imuReading.x + imuReading.y * imuReading.y + imuReading.z * imuReading.z;
+    double fractional_threshold = 0.01;
+
+    if (accMagnitude < steadyStateAccMagnitude * (1 - fractional_threshold) || accMagnitude > steadyStateAccMagnitude * (1 + fractional_threshold)) {
+        return true;
+    }
+    return false;
+}
+
+void DW1000_sleep() {
+    assert(!inSleep);
+    DW1000.deepSleep();
+    inSleep = true;
+    // mark led for sleep
+    digitalWrite(LED_BUILTIN, HIGH);
+}
+
+void DW1000_wakeup() {
+    assert(inSleep);
+    DW1000.spiWakeup();
+    inSleep = false;
+    // mark led for wakeup
+    digitalWrite(LED_BUILTIN, LOW);
+}
+
+void checkIMUandRetransmit() {
+    if (checkIMUmotion()) {
+        if (inSleep) {
+            DW1000_wakeup();
+        }
+        expectedMsgId = POLL_ACK;
+        transmitPoll();
+    }
+    else {
+        if (!inSleep) {
+            DW1000_sleep();
+        }
+    }
+    noteActivity();
+}
+
 void resetInactive() {
     // tag sends POLL and listens for POLL_ACK
-    expectedMsgId = POLL_ACK;
-    transmitPoll();
-    noteActivity();
+    checkIMUandRetransmit();
 }
 
 void handleSent() {
@@ -149,52 +219,54 @@ void receiver() {
 }
 
 void loop() {
-    if (!sentAck && !receivedAck) {
-        // check if inactive
-        if (millis() - lastActivity > resetPeriod) {
+    if (inSleep) {
+        if (millis() - lastActivity > resetSleepPeriod) {
             resetInactive();
         }
-        return;
     }
-    // continue on any success confirmation
-    if (sentAck) {
-        sentAck = false;
-        byte msgId = data[0];
-        if (msgId == POLL) {
-            DW1000.getTransmitTimestamp(timePollSent);
-            //Serial.print("Sent POLL @ "); Serial.println(timePollSent.getAsFloat());
-        } else if (msgId == RANGE) {
-            DW1000.getTransmitTimestamp(timeRangeSent);
-            noteActivity();
-        }
-    }
-    if (receivedAck) {
-        receivedAck = false;
-        // get message and parse
-        DW1000.getData(data, LEN_DATA);
-        byte msgId = data[0];
-        if (msgId != expectedMsgId) {
-            // unexpected message, start over again
-            //Serial.print("Received wrong message # "); Serial.println(msgId);
-            expectedMsgId = POLL_ACK;
-            transmitPoll();
+    else {
+        if (!sentAck && !receivedAck) {
+            // check if inactive
+            if (millis() - lastActivity > resetPeriod) {
+                resetInactive();
+            }
             return;
         }
-        if (msgId == POLL_ACK) {
-            DW1000.getReceiveTimestamp(timePollAckReceived);
-            expectedMsgId = RANGE_REPORT;
-            transmitRange();
-            noteActivity();
-        } else if (msgId == RANGE_REPORT) {
-            expectedMsgId = POLL_ACK;
-            float curRange;
-            memcpy(&curRange, data + 1, 4);
-            transmitPoll();
-            noteActivity();
-        } else if (msgId == RANGE_FAILED) {
-            expectedMsgId = POLL_ACK;
-            transmitPoll();
-            noteActivity();
+        // continue on any success confirmation
+        if (sentAck) {
+            sentAck = false;
+            byte msgId = data[0];
+            if (msgId == POLL) {
+                DW1000.getTransmitTimestamp(timePollSent);
+                //Serial.print("Sent POLL @ "); Serial.println(timePollSent.getAsFloat());
+            } else if (msgId == RANGE) {
+                DW1000.getTransmitTimestamp(timeRangeSent);
+                noteActivity();
+            }
+        }
+        if (receivedAck) {
+            receivedAck = false;
+            // get message and parse
+            DW1000.getData(data, LEN_DATA);
+            byte msgId = data[0];
+            if (msgId != expectedMsgId) {
+                // unexpected message, start over again
+                //Serial.print("Received wrong message # "); Serial.println(msgId);
+                checkIMUandRetransmit();
+                return;
+            }
+            if (msgId == POLL_ACK) {
+                DW1000.getReceiveTimestamp(timePollAckReceived);
+                expectedMsgId = RANGE_REPORT;
+                transmitRange();
+                noteActivity();
+            } else if (msgId == RANGE_REPORT) {
+                float curRange;
+                memcpy(&curRange, data + 1, 4);
+                checkIMUandRetransmit();
+            } else if (msgId == RANGE_FAILED) {
+                checkIMUandRetransmit();
+            }
         }
     }
 }
