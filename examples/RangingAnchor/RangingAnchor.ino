@@ -31,10 +31,10 @@
 #include <SPI.h>
 #include <DW1000.h>
 
-// connection pins
+//UWB Globals
 const uint8_t PIN_RST = 9; // reset pin
-const uint8_t PIN_IRQ = 2; // irq pin
-const uint8_t PIN_SS = SS; // spi select pin
+const uint8_t PIN_IRQ = 17; // irq pin
+const uint8_t PIN_SS = 19; // spi select pin
 
 // messages used in the ranging protocol
 // TODO replace by enum
@@ -124,11 +124,13 @@ void resetInactive() {
 void handleSent() {
     // status change on sent success
     sentAck = true;
+    Serial.println("Send complete");
 }
 
 void handleReceived() {
     // status change on received success
     receivedAck = true;
+    Serial.println("Receive complete");
 }
 
 void transmitPollAck() {
