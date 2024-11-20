@@ -31,17 +31,17 @@
 #include <DW1000.h>
 #include <assert.h>
 
-// connection pins
+//UWB Globals
 const uint8_t PIN_RST = 9; // reset pin
-const uint8_t PIN_IRQ = 2; // irq pin
-const uint8_t PIN_SS = SS; // spi select pin
+const uint8_t PIN_IRQ = 17; // irq pin
+const uint8_t PIN_SS = 19; // spi select pin
 
 // Define pins for ADXL335
 const int xPin = A0;
 const int yPin = A1;
-const int zPin = A2;
+const int zPin = A4;
 
-int steadyStateAccMagnitude = 940000;
+int steadyStateAccMagnitude = 10500;
 
 // messages used in the ranging protocol
 // TODO replace by enum
@@ -74,21 +74,24 @@ uint32_t resetSleepPeriod = 0;
 // Device sleep state
 boolean inSleep = false;
 
-void setup() {
-    // DEBUG monitoring
-    Serial.begin(115200);
-    Serial.println(F("### DW1000-arduino-ranging-tag ###"));
-    // initialize the driver
-    DW1000.begin(PIN_IRQ, PIN_RST);
+void reset_DW1000_config() {
     DW1000.select(PIN_SS);
-    Serial.println("DW1000 initialized ...");
-    // general configuration
     DW1000.newConfiguration();
     DW1000.setDefaults();
     DW1000.setDeviceAddress(2);
     DW1000.setNetworkId(10);
     DW1000.enableMode(DW1000.MODE_LONGDATA_RANGE_LOWPOWER);
     DW1000.commitConfiguration();
+}
+
+void setup() {
+    // DEBUG monitoring
+    Serial.begin(115200);
+    Serial.println(F("### DW1000-arduino-ranging-tag ###"));
+    // initialize the driver
+    DW1000.begin(PIN_IRQ, PIN_RST);
+    Serial.println("DW1000 initialized ...");
+    reset_DW1000_config();
     Serial.println(F("Committed configuration ..."));
     // DEBUG chip info and registers pretty printed
     char msg[128];
@@ -126,11 +129,19 @@ struct IMUReading getCalibratedIMUReading() {
     int y = analogRead(yPin);
     int z = analogRead(zPin);
 
+    int base_x = 515;
+    int base_y = 510;
+    int base_z = 525;
+
+    x -= base_x;
+    y -= base_y;
+    z -= base_z;
+
     Serial.print("X: ");
     Serial.print(x);
-    Serial.print("g\tY: ");
+    Serial.print("\tY: ");
     Serial.print(y);
-    Serial.print("g\tZ: ");
+    Serial.print("\tZ: ");
     Serial.print(z);
 
     return {x, y, z};
@@ -139,7 +150,7 @@ struct IMUReading getCalibratedIMUReading() {
 bool checkIMUmotion() {
     IMUReading_t imuReading = getCalibratedIMUReading();
     int accMagnitude = imuReading.x * imuReading.x + imuReading.y * imuReading.y + imuReading.z * imuReading.z;
-    double fractional_threshold = 0.1;
+    double fractional_threshold = 0.2;
 
     Serial.print("\taccMagnitude: ");
     Serial.print(accMagnitude);
@@ -164,12 +175,14 @@ void DW1000_wakeup() {
     assert(inSleep);
     DW1000.spiWakeup();
     inSleep = false;
+    reset_DW1000_config();
+    receiver();
     // mark led for wakeup
-    digitalWrite(LED_BUILTIN, HIGH);
+    // digitalWrite(LED_BUILTIN, HIGH);
 }
 
 void checkIMUandRetransmit() {
-    Serial.print("Inside check IMU and Retransmit");
+    // Serial.print("Inside check IMU and Retransmit");
     if (checkIMUmotion()) {
         if (inSleep) {
             DW1000_wakeup();
@@ -193,11 +206,13 @@ void resetInactive() {
 void handleSent() {
     // status change on sent success
     sentAck = true;
+    Serial.println("Send complete");
 }
 
 void handleReceived() {
     // status change on received success
     receivedAck = true;
+    Serial.println("Receive complete");
 }
 
 void transmitPoll() {
