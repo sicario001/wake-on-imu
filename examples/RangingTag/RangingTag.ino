@@ -74,6 +74,9 @@ uint32_t resetSleepPeriod = 0;
 // Device sleep state
 boolean inSleep = false;
 
+uint32_t sampling_window = 100;
+int32_t last_motion_detected = -sampling_window;
+
 void reset_DW1000_config() {
     DW1000.select(PIN_SS);
     DW1000.newConfiguration();
@@ -149,18 +152,22 @@ struct IMUReading getCalibratedIMUReading() {
 
 bool checkIMUmotion() {
     IMUReading_t imuReading = getCalibratedIMUReading();
-    int accMagnitude = imuReading.x * imuReading.x + imuReading.y * imuReading.y + imuReading.z * imuReading.z;
+    uint32_t accMagnitude = imuReading.x * imuReading.x + imuReading.y * imuReading.y + imuReading.z * imuReading.z;
     double fractional_threshold = 0.2;
+
+    uint32_t curr_time = millis();
+
+    if(accMagnitude < (steadyStateAccMagnitude * (1-fractional_threshold)) ||
+    accMagnitude > (steadyStateAccMagnitude * (1+fractional_threshold))) {
+      last_motion_detected = curr_time;
+    }
 
     Serial.print("\taccMagnitude: ");
     Serial.print(accMagnitude);
     Serial.print("\tsteadyStateAccMagnitude: ");
     Serial.println(steadyStateAccMagnitude);
 
-    if (accMagnitude < steadyStateAccMagnitude * (1 - fractional_threshold) || accMagnitude > steadyStateAccMagnitude * (1 + fractional_threshold)) {
-        return true;
-    }
-    return false;
+    return (curr_time - last_motion_detected) < sampling_window;
 }
 
 void DW1000_sleep() {
