@@ -74,8 +74,10 @@ uint32_t resetSleepPeriod = 0;
 // Device sleep state
 boolean inSleep = false;
 
-uint32_t sampling_window = 100;
+uint32_t sampling_window = 500;
 int32_t last_motion_detected = -sampling_window;
+bool sleep_to_wake = false;
+uint32_t transmit_poll_time;
 
 void reset_DW1000_config() {
     DW1000.select(PIN_SS);
@@ -140,12 +142,12 @@ struct IMUReading getCalibratedIMUReading() {
     y -= base_y;
     z -= base_z;
 
-    Serial.print("X: ");
-    Serial.print(x);
-    Serial.print("\tY: ");
-    Serial.print(y);
-    Serial.print("\tZ: ");
-    Serial.print(z);
+    // Serial.print("X: ");
+    // Serial.print(x);
+    // Serial.print("\tY: ");
+    // Serial.print(y);
+    // Serial.print("\tZ: ");
+    // Serial.print(z);
 
     return {x, y, z};
 }
@@ -157,15 +159,23 @@ bool checkIMUmotion() {
 
     uint32_t curr_time = millis();
 
-    if(accMagnitude < (steadyStateAccMagnitude * (1-fractional_threshold)) ||
-    accMagnitude > (steadyStateAccMagnitude * (1+fractional_threshold))) {
+    bool condition = accMagnitude < (steadyStateAccMagnitude * (1-fractional_threshold)) ||
+    accMagnitude > (steadyStateAccMagnitude * (1+fractional_threshold));
+
+    if(condition) {
       last_motion_detected = curr_time;
     }
 
-    Serial.print("\taccMagnitude: ");
-    Serial.print(accMagnitude);
-    Serial.print("\tsteadyStateAccMagnitude: ");
-    Serial.println(steadyStateAccMagnitude);
+    // Serial.print("\taccMagnitude: ");
+    // Serial.print(accMagnitude);
+    // Serial.print("\tsteadyStateAccMagnitude: ");
+    // Serial.println(steadyStateAccMagnitude);
+
+    Serial.print("IMU_Detected:");
+    Serial.print(condition);
+    Serial.print(",");
+    Serial.print("Transmission:");
+    Serial.println((curr_time - last_motion_detected) < sampling_window);
 
     return (curr_time - last_motion_detected) < sampling_window;
 }
@@ -181,6 +191,7 @@ void DW1000_sleep() {
 void DW1000_wakeup() {
     assert(inSleep);
     DW1000.spiWakeup();
+    sleep_to_wake = true;
     inSleep = false;
     reset_DW1000_config();
     receiver();
@@ -190,6 +201,7 @@ void DW1000_wakeup() {
 
 void checkIMUandRetransmit() {
     // Serial.print("Inside check IMU and Retransmit");
+    sleep_to_wake = false;
     if (checkIMUmotion()) {
         if (inSleep) {
             DW1000_wakeup();
@@ -213,16 +225,17 @@ void resetInactive() {
 void handleSent() {
     // status change on sent success
     sentAck = true;
-    Serial.println("Send complete");
+    // Serial.println("Send complete");
 }
 
 void handleReceived() {
     // status change on received success
     receivedAck = true;
-    Serial.println("Receive complete");
+    // Serial.println("Receive complete");
 }
 
 void transmitPoll() {
+    transmit_poll_time = millis();
     DW1000.newTransmit();
     DW1000.setDefaults();
     data[0] = POLL;
@@ -298,6 +311,30 @@ void loop() {
             } else if (msgId == RANGE_REPORT) {
                 float curRange;
                 memcpy(&curRange, data + 1, 4);
+                uint32_t curr_time = millis();
+                uint32_t wakeup_latency, transmission_latency;
+                if(sleep_to_wake) {
+                  // Serial.print("Last motion detected: ");
+                  // Serial.print(last_motion_detected);
+                  // Serial.print("\tCurr time: ");
+                  // Serial.print(curr_time);
+                  // Serial.print("\tLatency: ");
+                  // Serial.println(curr_time - last_motion_detected);
+                  wakeup_latency = transmit_poll_time - last_motion_detected;
+                  transmission_latency = curr_time - transmit_poll_time;
+                  Serial.print("Wakeup_latency:");
+                  Serial.print(wakeup_latency);
+                  Serial.print(",");
+                  Serial.print("Transmision_latency:");
+                  Serial.println(transmission_latency);
+                }
+                // Serial.print("Transmit poll time: ");
+                // Serial.print(transmit_poll_time);
+                // Serial.print("\tCurr time: ");
+                // Serial.print(curr_time);
+                // Serial.print("\tLatency: ");
+                // Serial.println(curr_time - transmit_poll_time);
+                
                 checkIMUandRetransmit();
             } else if (msgId == RANGE_FAILED) {
                 checkIMUandRetransmit();
