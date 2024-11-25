@@ -35,6 +35,7 @@
 const uint8_t PIN_RST = 9; // reset pin
 const uint8_t PIN_IRQ = 17; // irq pin
 const uint8_t PIN_SS = 19; // spi select pin
+const uint8_t PIN_EXTON = 13;
 
 // Define pins for ADXL335
 const int xPin = A0;
@@ -72,9 +73,16 @@ uint16_t replyDelayTimeUS = 3000;
 uint32_t resetSleepPeriod = 0;
 
 // Device sleep state
-boolean inSleep = false;
+enum SleepType {
+  IDLE,
+  DEEP_SLEEP,
+};
 
-uint32_t sampling_window = 500;
+boolean inSleep = false;
+enum SleepType sleep_type = SleepType::DEEP_SLEEP; 
+
+
+uint32_t sampling_window = 500000;
 int32_t last_motion_detected = -sampling_window;
 bool sleep_to_wake = false;
 uint32_t transmit_poll_time;
@@ -157,7 +165,7 @@ bool checkIMUmotion() {
     uint32_t accMagnitude = imuReading.x * imuReading.x + imuReading.y * imuReading.y + imuReading.z * imuReading.z;
     double fractional_threshold = 0.2;
 
-    uint32_t curr_time = millis();
+    uint32_t curr_time = micros();
 
     bool condition = accMagnitude < (steadyStateAccMagnitude * (1-fractional_threshold)) ||
     accMagnitude > (steadyStateAccMagnitude * (1+fractional_threshold));
@@ -171,18 +179,38 @@ bool checkIMUmotion() {
     // Serial.print("\tsteadyStateAccMagnitude: ");
     // Serial.println(steadyStateAccMagnitude);
 
-    Serial.print("IMU_Detected:");
-    Serial.print(condition);
-    Serial.print(",");
-    Serial.print("Transmission:");
-    Serial.println((curr_time - last_motion_detected) < sampling_window);
+    // Serial.print("IMU_Detected:");
+    // Serial.print(condition);
+    // Serial.print(",");
+    // Serial.print("Transmission:");
+    // Serial.println((curr_time - last_motion_detected) < sampling_window);
 
     return (curr_time - last_motion_detected) < sampling_window;
 }
 
 void DW1000_sleep() {
     assert(!inSleep);
-    DW1000.deepSleep();
+    switch(sleep_type) {
+      case SleepType::IDLE:
+        DW1000.idle();
+        break;
+      default:
+        // Serial.print("Previous time: ");
+        // Serial.println(micros());
+        // DW1000Time prev_time;
+        // DW1000.getSystemTimestamp(prev_time);
+        // Serial.print("Current time before going to sleep: ");
+        // Serial.println(prev_time);
+        DW1000.deepSleep();
+        // delay(10);
+        // DW1000Time curr_time;
+        // DW1000.getSystemTimestamp(curr_time);
+        // Serial.print("Current time after going to sleep: ");
+        // Serial.println(curr_time);
+        // Serial.print("Current time: ");
+        // Serial.println(micros());
+        break;
+    }
     inSleep = true;
     // mark led for sleep
     digitalWrite(LED_BUILTIN, LOW);
@@ -190,16 +218,23 @@ void DW1000_sleep() {
 
 void DW1000_wakeup() {
     assert(inSleep);
-    DW1000.spiWakeup();
+    switch(sleep_type) {
+      case SleepType::DEEP_SLEEP:
+        DW1000.spiWakeup();
+        reset_DW1000_config();
+        break;
+      default:
+        break;
+    }
     sleep_to_wake = true;
     inSleep = false;
-    reset_DW1000_config();
     receiver();
     // mark led for wakeup
     // digitalWrite(LED_BUILTIN, HIGH);
 }
 
-void checkIMUandRetransmit() {
+void 
+checkIMUandRetransmit() {
     // Serial.print("Inside check IMU and Retransmit");
     sleep_to_wake = false;
     if (checkIMUmotion()) {
@@ -235,7 +270,7 @@ void handleReceived() {
 }
 
 void transmitPoll() {
-    transmit_poll_time = millis();
+    transmit_poll_time = micros();
     DW1000.newTransmit();
     DW1000.setDefaults();
     data[0] = POLL;
@@ -311,7 +346,7 @@ void loop() {
             } else if (msgId == RANGE_REPORT) {
                 float curRange;
                 memcpy(&curRange, data + 1, 4);
-                uint32_t curr_time = millis();
+                uint32_t curr_time = micros();
                 uint32_t wakeup_latency, transmission_latency;
                 if(sleep_to_wake) {
                   // Serial.print("Last motion detected: ");
