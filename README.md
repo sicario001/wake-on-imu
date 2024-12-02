@@ -1,174 +1,64 @@
-# arduino-dw1000
+# Wake-on-IMU
 
-![Maintenance](https://img.shields.io/maintenance/no/2019.svg)
-![Required know-how](https://img.shields.io/badge/Required%20know--how-professional-red.svg)
-![Additional hardware required](https://img.shields.io/badge/Additional%20hardware-required-orange.svg)
-![c++11](https://img.shields.io/badge/C%2B%2B-11-brightgreen.svg)
-[![releases](https://img.shields.io/github/release/thotro/arduino-dw1000.svg?colorB=00aa00)](https://github.com/thotro/arduino-dw1000/releases)
-![min arduino ide](https://img.shields.io/badge/ArduinoIDE-%3E%3D1.6.10-lightgrey.svg)
-[![GitHub license](https://img.shields.io/badge/license-Apache%202-blue.svg)](https://raw.githubusercontent.com/thotro/arduino-dw1000/master/LICENSE.md)
+The repository is adopted with some modifications by Prof. Ashutosh Dhekne and his Lab from [https://github.com/thotro/arduino-dw1000](https://github.com/thotro/arduino-dw1000).
 
-A library that offers basic functionality to use Decawave's DW1000 chips/modules with Arduino
-(see https://www.decawave.com/products/dwm1000-module).
+For more details on source repository, please refer [source_README.md](source_README.md).
 
-Project state
--------------
+We modified [RangingTag.ino](examples/RangingTag/RangingTag.ino) to perform Two-Way Ranging (TWR) only when motion is detected by IMU Sensor. This saves us power by not doing TWR when device is stationary which makes sense because location of device is not going to change at all, so we don't need to continuously measure the location of the device all the time.
 
-**Development:**
-There is **no active development** by the owner *thotro*.
+## Setup Instructions
+- Download Arduino IDE
+- The board we used was based on Adafruit Feather M0. Instructions to setup Arduino for that board are given [here](https://learn.adafruit.com/adafruit-feather-m0-basic-proto/setup).
 
-This library is currently (2019) **not actively maintained**.
+![boards](docs/images/boards.jpg)
 
-Anyway you can create pull requests if you found a bug or developed a new feature. They maybe help others.
+## Run Instructions
+We would need 2 boards to run our script. 1 board will install [RangingTag.ino](examples/RangingTag/RangingTag.ino) file and another board will install [RangingAnchor.ino](examples/RangingAnchor/RangingAnchor.ino) file.
+- Open [RangingTag.ino](examples/RangingTag/RangingTag.ino) and install it on board 1.
+- Open [RangingAnchor.ino](examples/RangingAnchor/RangingAnchor.ino) and install it on board 2.
+- Launch serial monitor for both the boards on Arduino IDE.
+- Lift board 1 and move it around randomly in non-uniform velocity.
+- You will see TWR being performed between board 1 & 2.
+- Now place the board 1 back on the table. TWR will stop and board 1 will go to deep sleep.
 
-**TODOs:**
-* Fill wiki: https://github.com/thotro/arduino-dw1000/wiki
-* MAC and frame filtering, error handling
-* Sleep/power optimizations
-* Refactor `DW1000Mac`
-* Refactor `DW1000Ranging`
-* Refactor `DW1000Device`
-* Update examples (complete todos in header notice)
+## States Supported
+We currently support 2 states on Ranging Tag.
+1. Deep Sleep: Here UWB sensor on board goes to sleep and consumes low power.
+2. Idle: UWB sensor does not tranmit or receive any signals, but is still awake. It consumes higher power but still less than actual transmission.
 
-**What can I do with this lib?:**
-Stable transmission of messages between two modules is possible. The code for device tuning is working as well, hence different modes of operation can be chosen. As frame filtering (i.e. via MAC conforming messages) is partially implemented yet, internal features of the chip for node addressing and auto-acknowledgement of messages can not be used. This is part of a future milestone. For now, if acknowledgements are required, they have to be sent manually and node addresses have to be encoded in the message payload and processed by the host controller.
+To modify these states, please modify `sleep_type` variable at line 82 of [RangingTag.ino](examples/RangingTag/RangingTag.ino).
 
-**General notice:**
-* The documentation https://github.com/thotro/arduino-dw1000/tree/master/extras/doc is manually generated and maybe out of date.
-* Datasheet and application notices are available at https://www.decawave.com/ (require free registration).
+## Power Measurement
+We also had a third device (FNIRSI USB Tester) to measure power consumption when board is asleep compared to when it is doing transmission.
 
-Installation
-------------
+![tester](docs/images/usb_tester.jpg)
 
-**Requires c++11 support**, Arduino IDE >= 1.6.6 support c++11.
+To measure power simply connect the USB Tester with board 1 (i.e., RangingTag), and connect the USB Tester to laptop. You will see the readings on the power measuring device itself as shown in above screenshot.
 
- 1. Get a ZIP file of the master branch or the latest release and save somewhere on your machine.
- 2. Open your Arduino IDE and goto _Sketch_ / _Include Library_ / _Add .ZIP Library..._
- 3. Select the downloaded ZIP file of the DW1000 library
- 4. You should now see the library in the list and have access to the examples in the dedicated section of the IDE
+To further plot the graphs when power is being measured, install FNIRSI USB Tester from this [website](https://fnirsi.com/pages/software?srsltid=AfmBOop1ni8fPXsU__Wkx92gbpVZN43U4pW5O9PuCiZe_OiUnLuzoTtP) under the title *C1 / FNB48S / FNB48P / FNB58 Software Download*. We used this [link](https://www.mediafire.com/file/5hvgsrlps2ceqlu/FNIRSI-%25E6%25B5%258B%25E8%25AF%2595%25E4%25BB%25AA%25E4%25B8%258A%25E4%25BD%25) to download PC app on Windows 11.
 
-Note that in version 1.6.6 of your Arduino IDE you can get the library via the Arduino library manager.
+## Results
 
-Contents
---------
+We measured power consumption across 2 different states `DEEP SLEEP` and `IDLE`, and results are shown in table below:
 
- * [Project structure](../../wiki/Project-structure)
- * [Features and design intentions](../../wiki/Features)
- * [Testbed and Adapter board](../../wiki/Testbed-and-Adapter-board)
- * [Projects, Media, Links](../../wiki/Projects)
- * [Benchmarks](../../wiki/Benchmarks)
- * API docs
-   * [HTML](https://cdn.rawgit.com/thotro/arduino-dw1000/master/extras/doc/html/index.html)
-   * [PDF](https://cdn.rawgit.com/thotro/arduino-dw1000/master/extras/doc/DW1000_Arduino_API_doc.pdf)
+| State | Power (W) |
+| ------|---------- |
+| Tx/Rx | 0.74      |
+| Idle  | 0.14      |
+| Deep Sleep | 0.075 |
 
-Usage
------
+We also measured wakeup latency once motion is detected from both of these states. We also measured latency to perform TWR. Results shown in table below:
 
-General usage of the DW1000 library is depicted below. Please see the Arduino test example codes (described in the [project structure](../../wiki/Project-structure)) for more up-to-date and operational reference usage. 
+| Action | Latency (ms) |
+|--------|--------------|
+|Wakeup from Deep Sleep| 42.53 |
+|Wakeup from IDLE | 0.23 |
+|TWR | 21.16 |
 
-At the moment the library contains two types:
- * **DW1000:**
- State: stable.
- The statically accessible entity to work with your modules. Offers a variety of configuration options and manages module states and actions. 
- 
- * **DW1000Time:**
- State: stable.
- Container entities that handle DW1000 specific timing values. These are required to allow accurate timestamps and time based computations; they aid in avoiding potential precision and capacity problems of standard number formats in Arduino and basically are wrapper objects for 64-bit signed integer data types; most importantly they take care of all bit-to-time-and-distance (and vice versa) conversions.
- 
- * **DW1000Ranging:**
- State: prototype.
- Contain all functions which allow to make the ranging protocole. 
- 
- * **DW1000Device:**
- State: prototype.
- Contain all informations (long address, short ephemeral address, DW1000Time of transition)  about a distant device (anchor or tag) on the same network.
- 
- * **DW1000Mac:**
- State: prototype.
- This class is a child of the DW1000Device class and allow to generate the MAC frame for his DW1000Device parent.
- 
+Finally, we show the power measurement graphs observed on USB Tester:
 
-```Arduino
-#include <DW1000.h>
-...
-// init with interrupt line and optionally with reset line
-DW1000.begin(irq_pin[, rst_pin]);
-// select a specific chip via a chip select line
-DW1000.select(cs_pin);
-// or use DW1000.reselect(cs_pin) to switch to previously selected chip
-...
-// open a device configuration sessions
-DW1000.newConfiguration();
-// configure specific aspects and/or choose defaults
-DW1000.setDefaults();
-DW1000.setDeviceAddress(5);
-DW1000.setNetworkId(10);
-// modes that define data rate, frequency, etc. (see API docs)
-DW1000.enableMode(DW1000.MODE_LONGDATA_RANGE_LOWPOWER);
-// ... and other stuff - finally upload to the module.
-DW1000.commitConfiguration();
-...
-// set some interrupt callback routines
-DW1000.attachSentHandler(some_handler_function);
-DW1000.attachReceivedHandler(another_handler_function);
-...
-// open a new transmit session
-DW1000.newTransmit();
-// configure specific aspects and/or choose defaults
-DW1000.setDefaults();
-DW1000.setData(some_data);
-DW1000Time delayTime = DW1000Time(100, DW1000Time::MILLISECONDS);
-[DW1000Time futureTimestamp = ]DW1000.setDelay(delayTime);
-// ... and other stuff - finally start the transmission
-DW1000.startTransmit();
-...
-// similar for a receiving session, like so ...
-DW1000.newReceive();
-DW1000.setDefaults();
-// so we don't need to restart the receiver manually each time
-DW1000.receivePermanently(true);
-// ... and other stuff - finally start awaiting messages
-DW1000.startReceive();
-...
-```
+### Deep Sleep
+![deep_sleep](docs/images/deep_sleep.gif)
 
-Dependency
-----------
-
-Disclaimer:
-This is maybe a incomplete list. Please notice that some dependency libraries may **require** a **reproduction** of copyright and license, **even if they are shipped as binary!!**
-
-* **Arduino.h**
-
-  * From: Arduino IDE / target specific
-  * License: (target: Arduino) GNU Lesser General Public License 2.1
-  
-* **SPI.h**
-
-  * From: Arduino IDE / target specific
-  * License: (target: Arduino) GNU Lesser General Public License 2.1
-  
-* **stdint.h**
-
-  * From: Arduino IDE / Compiler and target specific
-  * License: different
-
-* **stdio.h**
-
-  * From: Arduino IDE / Compiler and target specific
-  * License: different
-  
-* **stdlib.h**
-
-  * From: Arduino IDE / Compiler and target specific
-  * License: different
-  
-* **string.h**
-
-  * From: Arduino IDE / Compiler and target specific
-  * License: different
-
-
-License
--------
-Apache License 2.0 (see [LICENSE.md](https://github.com/thotro/arduino-dw1000/blob/master/LICENSE.md))
+### Idle
+![idle](docs/images/idle.gif)
