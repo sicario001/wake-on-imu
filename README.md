@@ -37,6 +37,8 @@ To measure power simply connect the USB Tester with board 1 (i.e., RangingTag), 
 
 To further plot the graphs when power is being measured, install FNIRSI USB Tester from this [website](https://fnirsi.com/pages/software?srsltid=AfmBOop1ni8fPXsU__Wkx92gbpVZN43U4pW5O9PuCiZe_OiUnLuzoTtP) under the title *C1 / FNB48S / FNB48P / FNB58 Software Download*. We used this [link](https://www.mediafire.com/file/5hvgsrlps2ceqlu/FNIRSI-%25E6%25B5%258B%25E8%25AF%2595%25E4%25BB%25AA%25E4%25B8%258A%25E4%25BD%25) to download PC app on Windows 11.
 
+Furthermore, for the plots to be visible on the USB Tester App, we will need to connect one more data cable from USB Tester device to laptop to transfer the measured data to laptop for plotting.
+
 ## Results
 
 We measured power consumption across 2 different states `DEEP SLEEP` and `IDLE`, and results are shown in table below:
