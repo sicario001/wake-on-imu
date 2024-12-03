@@ -64,3 +64,8 @@ Finally, we show the power measurement graphs observed on USB Tester:
 
 ### Idle
 ![idle](docs/images/idle.gif)
+
+## Possible Directions
+We also wanted to explore how we can completely turn off UWB sensor because even Deep Sleep consumes 0.07 W power. There are 2 approaches we were trying to explore (can be possible directions for future projects):
+1. Setting EXTON and RSTn ports to completely turn off UWB. Since boards were custom designed, we couldn't use PIN numbers given in DW1000 manual.
+2. Using MOSFET transistor to cutoff power supply to UWB.
