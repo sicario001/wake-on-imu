@@ -1,4 +1,4 @@
-# Wake-on-IMU
+# Wake-on-UWB
 
 The repository is adopted with some modifications by Prof. Ashutosh Dhekne and his Lab from [https://github.com/thotro/arduino-dw1000](https://github.com/thotro/arduino-dw1000).
 
